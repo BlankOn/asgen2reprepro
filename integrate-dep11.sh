@@ -13,9 +13,9 @@ DIST_DIR=""
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "  --basedir DIR           Repository root (default: current directory)"
-    echo "  --distributions FILE    Path to distributions file (default: <basedir>/conf/distributions)"
-    echo "  --dist DIR              Path to dist directory containing Release (default: <basedir>/dists/<codename>)"
+    echo "  --basedir DIR           Appstream-generator working directory with cache/db/export (default: current directory)"
+    echo "  --distributions FILE    Path to reprepro distributions file (required if not at <basedir>/conf/distributions)"
+    echo "  --dist DIR              Path to dist directory containing Release (required if not at <basedir>/dists/<codename>)"
     echo "  --gpg-key KEYID         GPG key ID to sign with (default: GPG default key)"
     exit 1
 }
@@ -53,7 +53,8 @@ BASEDIR="$(cd "$BASEDIR" && pwd)"
 
 DISTFILE="${DISTFILE:-$BASEDIR/conf/distributions}"
 if [[ ! -f "$DISTFILE" ]]; then
-    echo "Error: $DISTFILE not found. Is this a reprepro repository?"
+    echo "Error: $DISTFILE not found."
+    echo "Provide --distributions to point to reprepro's distributions file."
     exit 1
 fi
 
@@ -70,17 +71,20 @@ if [[ -z "$COMPONENTS" ]]; then
     exit 1
 fi
 
-SUITE_DIR="${DIST_DIR:-$BASEDIR/dists/$CODENAME}"
 if [[ -n "$DIST_DIR" ]]; then
-    SUITE_DIR="$(cd "$SUITE_DIR" && pwd)"
+    SUITE_DIR="$(cd "$DIST_DIR" && pwd)"
+else
+    SUITE_DIR="$BASEDIR/dists/$CODENAME"
 fi
 RELEASE_FILE="$SUITE_DIR/Release"
 
 if [[ ! -f "$RELEASE_FILE" ]]; then
-    echo "Error: $RELEASE_FILE not found. Run 'reprepro export' first."
+    echo "Error: $RELEASE_FILE not found."
+    echo "Provide --dist to point to the directory containing Release."
     exit 1
 fi
 
+echo "Basedir:       $BASEDIR"
 echo "Distributions: $DISTFILE"
 echo "Dist dir:      $SUITE_DIR"
 echo "Codename:      $CODENAME"
