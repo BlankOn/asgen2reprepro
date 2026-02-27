@@ -91,25 +91,35 @@ echo "Codename:      $CODENAME"
 echo "Components:    $COMPONENTS"
 echo ""
 
-# Collect dep11 files across all components
+# Source dep11 files from asgen export/data/<codename>/<component>/
+ASGEN_DATA="$BASEDIR/export/data/$CODENAME"
+
+# Collect and copy dep11 files from asgen basedir to reprepro dist dir
 declare -a DEP11_RELPATHS=()
 
 for component in $COMPONENTS; do
-    dep11dir="$SUITE_DIR/$component/dep11"
-    if [[ ! -d "$dep11dir" ]]; then
-        echo "Skipping component '$component': no dep11 directory"
+    src_dep11="$ASGEN_DATA/$component"
+    if [[ ! -d "$src_dep11" ]]; then
+        echo "Skipping component '$component': no data in asgen export"
         continue
     fi
 
-    files="$(find "$dep11dir" -maxdepth 1 -type f | sort)"
+    files="$(find "$src_dep11" -maxdepth 1 -type f | sort)"
     if [[ -z "$files" ]]; then
-        echo "Skipping component '$component': dep11 directory is empty"
+        echo "Skipping component '$component': no files in asgen export"
         continue
     fi
 
-    echo "Found dep11 data for component '$component':"
+    # Copy dep11 files to reprepro dist dir
+    dst_dep11="$SUITE_DIR/$component/dep11"
+    mkdir -p "$dst_dep11"
+    echo "Copying dep11 data for component '$component':"
+    echo "  from: $src_dep11"
+    echo "  to:   $dst_dep11"
+
     while IFS= read -r filepath; do
         filename="$(basename "$filepath")"
+        cp "$filepath" "$dst_dep11/$filename"
         relpath="$component/dep11/$filename"
         DEP11_RELPATHS+=("$relpath")
         echo "  $relpath"
@@ -119,7 +129,7 @@ done
 echo ""
 
 if [[ ${#DEP11_RELPATHS[@]} -eq 0 ]]; then
-    echo "Error: No dep11 files found for any component."
+    echo "Error: No dep11 files found for any component in $ASGEN_DATA."
     echo "Run 'appstream-generator' first to generate DEP-11 metadata."
     exit 1
 fi
