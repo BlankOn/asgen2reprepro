@@ -7,12 +7,16 @@ set -euo pipefail
 
 BASEDIR=""
 GPG_KEY=""
+DISTFILE=""
+DIST_DIR=""
 
 usage() {
-    echo "Usage: $0 [--basedir DIR] [--gpg-key KEYID]"
+    echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "  --basedir DIR     Repository root (default: current directory)"
-    echo "  --gpg-key KEYID   GPG key ID to sign with (default: GPG default key)"
+    echo "  --basedir DIR           Repository root (default: current directory)"
+    echo "  --distributions FILE    Path to distributions file (default: <basedir>/conf/distributions)"
+    echo "  --dist DIR              Path to dist directory containing Release (default: <basedir>/dists/<codename>)"
+    echo "  --gpg-key KEYID         GPG key ID to sign with (default: GPG default key)"
     exit 1
 }
 
@@ -20,6 +24,14 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --basedir)
             BASEDIR="$2"
+            shift 2
+            ;;
+        --distributions)
+            DISTFILE="$2"
+            shift 2
+            ;;
+        --dist)
+            DIST_DIR="$2"
             shift 2
             ;;
         --gpg-key)
@@ -39,7 +51,7 @@ done
 BASEDIR="${BASEDIR:-.}"
 BASEDIR="$(cd "$BASEDIR" && pwd)"
 
-DISTFILE="$BASEDIR/conf/distributions"
+DISTFILE="${DISTFILE:-$BASEDIR/conf/distributions}"
 if [[ ! -f "$DISTFILE" ]]; then
     echo "Error: $DISTFILE not found. Is this a reprepro repository?"
     exit 1
@@ -58,7 +70,10 @@ if [[ -z "$COMPONENTS" ]]; then
     exit 1
 fi
 
-SUITE_DIR="$BASEDIR/dists/$CODENAME"
+SUITE_DIR="${DIST_DIR:-$BASEDIR/dists/$CODENAME}"
+if [[ -n "$DIST_DIR" ]]; then
+    SUITE_DIR="$(cd "$SUITE_DIR" && pwd)"
+fi
 RELEASE_FILE="$SUITE_DIR/Release"
 
 if [[ ! -f "$RELEASE_FILE" ]]; then
@@ -66,9 +81,10 @@ if [[ ! -f "$RELEASE_FILE" ]]; then
     exit 1
 fi
 
-echo "Repository: $BASEDIR"
-echo "Codename:   $CODENAME"
-echo "Components: $COMPONENTS"
+echo "Distributions: $DISTFILE"
+echo "Dist dir:      $SUITE_DIR"
+echo "Codename:      $CODENAME"
+echo "Components:    $COMPONENTS"
 echo ""
 
 # Collect dep11 files across all components
