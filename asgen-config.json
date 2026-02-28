@@ -1,0 +1,18 @@
+{
+    "ProjectName": "BlankOn",
+    "Backend": "debian",
+    "MetadataType": "YAML",
+    "OriginName": "blankon",
+    "MediaBaseUrl": "https://arsip-dev.blankonlinux.id/media",
+    "HtmlBaseUrl": "https://arsip-dev.blankonlinux.id/report",
+    "WorkspaceDir": "/var/lib/asgen/workspace",
+    "ArchiveRoot": "/var/lib/irgsh/repo/verbeek/www",
+    "Suites": {
+        "verbeek": {
+            "dataPriority": 10,
+            "baseSuite": "verbeek",
+            "sections": ["main", "restricted", "extras", "restricted-firmware"],
+            "architectures": ["amd64"]
+        }
+    }
+}
