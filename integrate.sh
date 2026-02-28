@@ -133,6 +133,16 @@ for component in $COMPONENTS; do
         relpath="$component/dep11/$filename"
         DEP11_RELPATHS+=("$relpath")
         echo "  $relpath"
+
+        # APT requires uncompressed base entries in the Release file.
+        # Decompress .gz files to produce the base version (e.g. .yml, .tar).
+        if [[ "$filename" == *.gz ]]; then
+            base_filename="${filename%.gz}"
+            gunzip -k -f "$dst_dep11/$filename"
+            base_relpath="$component/dep11/$base_filename"
+            DEP11_RELPATHS+=("$base_relpath")
+            echo "  $base_relpath (decompressed)"
+        fi
     done <<< "$files"
 done
 
