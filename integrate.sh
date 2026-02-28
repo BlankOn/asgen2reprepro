@@ -11,12 +11,12 @@ DISTFILE=""
 DIST_DIR=""
 
 usage() {
-    echo "Usage: $0 [OPTIONS]"
+    echo "Usage: $0 --basedir DIR --distributions FILE --dist DIR --gpg-key KEYID"
     echo ""
-    echo "  --basedir DIR           Appstream-generator working directory with cache/db/export (default: current directory)"
-    echo "  --distributions FILE    Path to reprepro distributions file (required if not at <basedir>/conf/distributions)"
-    echo "  --dist DIR              Path to dist directory containing Release (required if not at <basedir>/dists/<codename>)"
-    echo "  --gpg-key KEYID         GPG key ID to sign with (default: GPG default key)"
+    echo "  --basedir DIR           Appstream-generator working directory with cache/db/export"
+    echo "  --distributions FILE    Path to reprepro distributions file"
+    echo "  --dist DIR              Path to dist directory containing Release"
+    echo "  --gpg-key KEYID         GPG key ID to sign with"
     exit 1
 }
 
@@ -48,13 +48,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-BASEDIR="${BASEDIR:-.}"
+if [[ -z "$BASEDIR" ]]; then
+    echo "Error: --basedir is required."
+    usage
+fi
+if [[ -z "$DISTFILE" ]]; then
+    echo "Error: --distributions is required."
+    usage
+fi
+if [[ -z "$DIST_DIR" ]]; then
+    echo "Error: --dist is required."
+    usage
+fi
+if [[ -z "$GPG_KEY" ]]; then
+    echo "Error: --gpg-key is required."
+    usage
+fi
+
 BASEDIR="$(cd "$BASEDIR" && pwd)"
 
-DISTFILE="${DISTFILE:-$BASEDIR/conf/distributions}"
 if [[ ! -f "$DISTFILE" ]]; then
     echo "Error: $DISTFILE not found."
-    echo "Provide --distributions to point to reprepro's distributions file."
     exit 1
 fi
 
@@ -71,11 +85,7 @@ if [[ -z "$COMPONENTS" ]]; then
     exit 1
 fi
 
-if [[ -n "$DIST_DIR" ]]; then
-    SUITE_DIR="$(cd "$DIST_DIR" && pwd)"
-else
-    SUITE_DIR="$BASEDIR/dists/$CODENAME"
-fi
+SUITE_DIR="$(cd "$DIST_DIR" && pwd)"
 RELEASE_FILE="$SUITE_DIR/Release"
 
 if [[ ! -f "$RELEASE_FILE" ]]; then
@@ -180,20 +190,42 @@ cp "$OUTPUT" "$RELEASE_FILE"
 echo "Updated $RELEASE_FILE with dep11 entries."
 
 # Sign the Release file
-GPG_OPTS=()
-if [[ -n "$GPG_KEY" ]]; then
-    GPG_OPTS+=(-u "$GPG_KEY")
-fi
-
 # Detached signature: Release.gpg
 rm -f "$SUITE_DIR/Release.gpg"
-gpg "${GPG_OPTS[@]}" --armor --detach-sign --output "$SUITE_DIR/Release.gpg" "$RELEASE_FILE"
+gpg -u "$GPG_KEY" --armor --detach-sign --output "$SUITE_DIR/Release.gpg" "$RELEASE_FILE"
 echo "Created $SUITE_DIR/Release.gpg"
 
 # Cleartext signature: InRelease
 rm -f "$SUITE_DIR/InRelease"
-gpg "${GPG_OPTS[@]}" --armor --clearsign --output "$SUITE_DIR/InRelease" "$RELEASE_FILE"
+gpg -u "$GPG_KEY" --armor --clearsign --output "$SUITE_DIR/InRelease" "$RELEASE_FILE"
 echo "Created $SUITE_DIR/InRelease"
 
 echo ""
 echo "Done. DEP-11 metadata integrated and Release signed."
+
+# Build Docker images for serving media and HTML via nginx
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo ""
+echo "Building Docker images..."
+
+# Build media Docker image
+echo "Building asgen-media Docker image..."
+docker build -f "$SCRIPT_DIR/Dockerfile.media" \
+    --build-arg MEDIA_DIR="$BASEDIR/export/media" \
+    -t asgen-media \
+    "$BASEDIR/export/media"
+echo "Built asgen-media image."
+
+# Build HTML Docker image
+echo "Building asgen-html Docker image..."
+docker build -f "$SCRIPT_DIR/Dockerfile.html" \
+    --build-arg HTML_DIR="$BASEDIR/export/html" \
+    -t asgen-html \
+    "$BASEDIR/export/html"
+echo "Built asgen-html image."
+
+echo ""
+echo "Docker images built successfully."
+echo "  Run media server: docker run -d -p 8081:80 asgen-media"
+echo "  Run HTML server:  docker run -d -p 8082:80 asgen-html"
