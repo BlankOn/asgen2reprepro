@@ -9,14 +9,16 @@ BASEDIR=""
 GPG_KEY=""
 DISTFILE=""
 DIST_DIR=""
+NO_DOCKER=false
 
 usage() {
-    echo "Usage: $0 --basedir DIR --distributions FILE --dist DIR --gpg-key KEYID"
+    echo "Usage: $0 --basedir DIR --distributions FILE --dist DIR --gpg-key KEYID [--no-docker]"
     echo ""
     echo "  --basedir DIR           Appstream-generator working directory with cache/db/export"
     echo "  --distributions FILE    Path to reprepro distributions file"
     echo "  --dist DIR              Path to dist directory containing Release"
     echo "  --gpg-key KEYID         GPG key ID to sign with"
+    echo "  --no-docker             Skip building Docker images"
     exit 1
 }
 
@@ -37,6 +39,10 @@ while [[ $# -gt 0 ]]; do
         --gpg-key)
             GPG_KEY="$2"
             shift 2
+            ;;
+        --no-docker)
+            NO_DOCKER=true
+            shift
             ;;
         -h|--help)
             usage
@@ -141,8 +147,26 @@ for component in $COMPONENTS; do
             gunzip -k -f "$dst_dep11/$filename"
             base_relpath="$component/dep11/$base_filename"
             DEP11_RELPATHS+=("$base_relpath")
-            echo "  $base_relpath (decompressed)"
+            echo "  $base_relpath (decompressed from .gz)"
         fi
+    done <<< "$files"
+
+    # Also decompress .xz files if the uncompressed version was not
+    # already produced from a .gz file above. This handles the case
+    # where asgen exports only .xz without a corresponding .gz.
+    while IFS= read -r filepath; do
+        filename="$(basename "$filepath")"
+        if [[ "$filename" != *.xz ]]; then
+            continue
+        fi
+        base_filename="${filename%.xz}"
+        if [[ -f "$dst_dep11/$base_filename" ]]; then
+            continue
+        fi
+        xz -k -d -f "$dst_dep11/$filename"
+        base_relpath="$component/dep11/$base_filename"
+        DEP11_RELPATHS+=("$base_relpath")
+        echo "  $base_relpath (decompressed from .xz)"
     done <<< "$files"
 done
 
@@ -214,28 +238,36 @@ echo ""
 echo "Done. DEP-11 metadata integrated and Release signed."
 
 # Build Docker images for serving media and HTML via nginx
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if $NO_DOCKER; then
+    echo ""
+    echo "Skipping Docker image build (--no-docker)."
+elif ! command -v docker &>/dev/null; then
+    echo ""
+    echo "Warning: docker not found, skipping image build."
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo ""
-echo "Building Docker images..."
+    echo ""
+    echo "Building Docker images..."
 
-# Build media Docker image
-echo "Building asgen-media Docker image..."
-docker build -f "$SCRIPT_DIR/Dockerfile.media" \
-    --build-arg MEDIA_DIR="$BASEDIR/export/media" \
-    -t asgen-media \
-    "$BASEDIR/export/media"
-echo "Built asgen-media image."
+    # Build media Docker image
+    echo "Building asgen-media Docker image..."
+    docker build -f "$SCRIPT_DIR/Dockerfile.media" \
+        --build-arg MEDIA_DIR="$BASEDIR/export/media" \
+        -t asgen-media \
+        "$BASEDIR/export/media"
+    echo "Built asgen-media image."
 
-# Build HTML Docker image
-echo "Building asgen-html Docker image..."
-docker build -f "$SCRIPT_DIR/Dockerfile.html" \
-    --build-arg HTML_DIR="$BASEDIR/export/html" \
-    -t asgen-html \
-    "$BASEDIR/export/html"
-echo "Built asgen-html image."
+    # Build HTML Docker image
+    echo "Building asgen-html Docker image..."
+    docker build -f "$SCRIPT_DIR/Dockerfile.html" \
+        --build-arg HTML_DIR="$BASEDIR/export/html" \
+        -t asgen-html \
+        "$BASEDIR/export/html"
+    echo "Built asgen-html image."
 
-echo ""
-echo "Docker images built successfully."
-echo "  Run media server: docker run -d -p 8081:80 asgen-media"
-echo "  Run HTML server:  docker run -d -p 8082:80 asgen-html"
+    echo ""
+    echo "Docker images built successfully."
+    echo "  Run media server: docker run -d -p 8081:80 asgen-media"
+    echo "  Run HTML server:  docker run -d -p 8082:80 asgen-html"
+fi
