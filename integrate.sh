@@ -9,16 +9,16 @@ BASEDIR=""
 GPG_KEY=""
 DISTFILE=""
 DIST_DIR=""
-NO_DOCKER=false
+BUILD_DOCKER=false
 
 usage() {
-    echo "Usage: $0 --basedir DIR --distributions FILE --dist DIR --gpg-key KEYID [--no-docker]"
+    echo "Usage: $0 --basedir DIR --distributions FILE --dist DIR --gpg-key KEYID [--docker]"
     echo ""
     echo "  --basedir DIR           Appstream-generator working directory with cache/db/export"
     echo "  --distributions FILE    Path to reprepro distributions file"
     echo "  --dist DIR              Path to dist directory containing Release"
     echo "  --gpg-key KEYID         GPG key ID to sign with"
-    echo "  --no-docker             Skip building Docker images"
+    echo "  --docker                Build Docker images for media and HTML serving"
     exit 1
 }
 
@@ -40,8 +40,8 @@ while [[ $# -gt 0 ]]; do
             GPG_KEY="$2"
             shift 2
             ;;
-        --no-docker)
-            NO_DOCKER=true
+        --docker)
+            BUILD_DOCKER=true
             shift
             ;;
         -h|--help)
@@ -223,6 +223,24 @@ done
 cp "$OUTPUT" "$RELEASE_FILE"
 echo "Updated $RELEASE_FILE with dep11 entries."
 
+# Copy media and HTML report to dist directory
+ASGEN_MEDIA="$BASEDIR/export/media"
+ASGEN_HTML="$BASEDIR/export/html"
+
+if [[ -d "$ASGEN_MEDIA" ]]; then
+    echo "Copying media to $SUITE_DIR/media"
+    rsync -a --delete "$ASGEN_MEDIA/" "$SUITE_DIR/media/"
+else
+    echo "Warning: $ASGEN_MEDIA not found, skipping media copy."
+fi
+
+if [[ -d "$ASGEN_HTML" ]]; then
+    echo "Copying HTML report to $SUITE_DIR/report"
+    rsync -a --delete "$ASGEN_HTML/" "$SUITE_DIR/report/"
+else
+    echo "Warning: $ASGEN_HTML not found, skipping HTML report copy."
+fi
+
 # Sign the Release file
 # Detached signature: Release.gpg
 rm -f "$SUITE_DIR/Release.gpg"
@@ -238,9 +256,9 @@ echo ""
 echo "Done. DEP-11 metadata integrated and Release signed."
 
 # Build Docker images for serving media and HTML via nginx
-if $NO_DOCKER; then
+if ! $BUILD_DOCKER; then
     echo ""
-    echo "Skipping Docker image build (--no-docker)."
+    echo "Skipping Docker image build (pass --docker to enable)."
 elif ! command -v docker &>/dev/null; then
     echo ""
     echo "Warning: docker not found, skipping image build."
